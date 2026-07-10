@@ -1,59 +1,60 @@
-# Lab 10 — DefectDojo Capstone
+# Lab 10 — Submission
 
-## Environment
+## Task 1: DefectDojo Setup + Import
 
-DefectDojo was deployed locally using Docker Compose.
+### DefectDojo version
 
-- DefectDojo version: `2.58.2-alpine`
+- Version installed: `2.58.2-alpine`
 - Platform: `linux/arm64`
-- URL: `http://localhost:8080`
-- Product: `OWASP Juice Shop`
-- Product ID: `1`
-- Engagement: `Course Semester Run`
-- Engagement ID: `1`
-- Engagement type: `CI/CD`
-- Engagement status: `In Progress`
+- Deployment method: Docker Compose
+- Local URL: `http://localhost:8080`
 
-The initial deployment failed because the Compose configuration used
-`defectdojo/defectdojo-django:latest` together with the source code of
-DefectDojo `2.58.2`.
-
-This caused a dependency mismatch:
-
-```text
-ModuleNotFoundError: No module named 'social_django'
-```
-
-The problem was fixed by pinning the DefectDojo images:
+The initial deployment failed because the Compose configuration used the
+latest DefectDojo images together with the source code from version 2.58.2.
+The problem was fixed by pinning the images to:
 
 ```text
 defectdojo/defectdojo-django:2.58.2-alpine
 defectdojo/defectdojo-nginx:2.58.2-alpine
 ```
 
-After that:
+After pinning the images, the initializer completed successfully and the UI
+returned HTTP 200.
 
-- the initializer completed with exit code `0`;
-- the DefectDojo UI returned HTTP `200`;
-- the containers used native `linux/arm64` images.
+The generated administrator password was retrieved from the initializer logs.
+It was changed after the first login and is intentionally not stored in the
+repository.
 
-## Imported security reports
+### Product + Engagement
 
-The following tests were created in DefectDojo:
+- Product ID: `1`
+- Product name: `OWASP Juice Shop`
+- Product description: `DevSecOps-Intro capstone product`
+- Engagement ID: `1`
+- Engagement name: `Course Semester Run`
+- Engagement type: `CI/CD`
+- Engagement status: `In Progress`
+- Target start: `2026-09-01`
+- Target end: `2026-12-15`
 
-| Test ID | Lab | Test | Scan type |
-|---:|---:|---|---|
-| 1 | 4 | Grype from SBOM | Anchore Grype |
-| 2 | 4 | Trivy filesystem or image scan | Trivy Scan |
-| 3 | 5 | Semgrep SAST | Semgrep JSON Report |
-| 5 | 6 | Checkov Terraform | Checkov Scan |
-| 6 | 6 | KICS Ansible | KICS Scan |
-| 7 | 6 | KICS Pulumi | KICS Scan |
-| 8 | 7 | Trivy container image | Trivy Scan |
-| 9 | 7 | Trivy Kubernetes | Trivy Operator Scan |
-| 11 | 5 | ZAP authenticated DAST | ZAP Scan |
+### Imports completed
 
-A total of nine reports were imported using seven different scan types:
+| Lab | Scan type | File | Findings imported |
+|---:|---|---|---:|
+| 4 | Anchore Grype | `grype-from-sbom.json` | 104 |
+| 4 | Trivy Scan | `trivy.json` | 113 |
+| 5 | Semgrep JSON Report | `semgrep.json` | 22 |
+| 5 | ZAP Scan | `auth-report.json` | 12 |
+| 6 | Checkov Scan | `checkov-terraform/results_json.json` | 80 |
+| 6 | KICS Scan | `kics-ansible/results.json` | 10 |
+| 6 | KICS Scan | `kics-pulumi/results.json` | 6 |
+| 7 | Trivy Scan | `trivy-image.json` | 50 |
+| 7 | Trivy Operator Scan | `trivy-k8s.json` | 0 |
+| **Total raw imports** | | | **397** |
+| **After deduplication** | | | **348 unique primary findings** |
+| **Active after Risk Acceptance** | | | **347 active primary findings** |
+
+Nine reports were imported using seven DefectDojo scan types:
 
 1. Anchore Grype
 2. Trivy Scan
@@ -63,10 +64,13 @@ A total of nine reports were imported using seven different scan types:
 6. KICS Scan
 7. Trivy Operator Scan
 
-## ZAP report conversion
+The Trivy Kubernetes report was imported successfully but contained no
+findings supported by the selected parser.
 
-The ZAP report from Lab 5 was generated in JSON format, while the
-DefectDojo `ZAP Scan` parser expected XML.
+### ZAP report conversion
+
+The Lab 5 ZAP report was generated in JSON format, while the DefectDojo
+`ZAP Scan` parser in version 2.58.2 expected XML.
 
 The first import attempt returned:
 
@@ -74,8 +78,7 @@ The first import attempt returned:
 Internal error: Wrong file format, please use xml.
 ```
 
-The report was converted from ZAP JSON into the XML structure expected by
-the parser:
+The report was converted into the following ZAP XML structure:
 
 ```text
 OWASPZAPReport
@@ -86,234 +89,241 @@ OWASPZAPReport
                 └── instance
 ```
 
-The converted report contained:
+The converted report contained four sites, 12 alerts and 42 request/response
+instances. The corrected import returned HTTP 201 and created 12 findings.
 
-- 4 sites;
-- 12 alerts;
-- 42 request and response instances.
+### Reports documented but not imported
 
-The corrected ZAP import completed with HTTP status `201` and created 12
-findings.
+#### Falco
 
-The imported ZAP findings included:
+The Lab 9 file `falco/logs/falco.log` contains runtime security alerts.
+It is not a vulnerability scan in a standard format supported by the
+installed DefectDojo parsers. The file was therefore documented as runtime
+detection evidence instead of being imported through an unrelated parser.
 
-- SQL Injection — High;
-- Content Security Policy Header Not Set — Medium;
-- Cross-Domain Misconfiguration — Medium;
-- Missing Anti-clickjacking Header — Medium;
-- Session ID in URL Rewrite — Medium;
-- Private IP Disclosure — Low;
-- Timestamp Disclosure — Low;
-- X-Content-Type-Options Header Missing — Low.
+#### Cosign
 
-## Findings summary
+The Lab 8 `verify-original.json` output represents verification of a signed
+container image. Cosign proves supply-chain authenticity and integrity but
+does not produce vulnerability findings. It was therefore treated as
+security evidence rather than imported as a vulnerability scan.
 
-Before deduplication:
+### Dedup example
 
-- Total findings: `397`
-- Active findings: `397`
-- Duplicate findings: `0`
+The vulnerability `CVE-2026-45447` in component `libssl3t64` version
+`3.5.5-1~deb13u2` was detected by two source tools and in three imported
+tests:
 
-After enabling and running deduplication:
+| Finding ID | Test | Source tool | Final state |
+|---:|---|---|---|
+| 12 | Lab 4 — Grype from SBOM | Anchore Grype | Duplicate of finding 119 |
+| 119 | Lab 4 — Trivy filesystem/image | Trivy Scan | Primary finding |
+| 336 | Lab 7 — Trivy container image | Trivy Scan | Duplicate of finding 119 |
 
-- Total findings: `397`
-- Primary findings: `349`
-- Duplicate findings: `48`
-- Active findings: `349`
-- Inactive findings: `48`
+Deduplication result:
 
-After creating one Risk Acceptance:
+- CVE/ID: `CVE-2026-45447`
+- Number of source tools: `2`
+- Source tools: Anchore Grype and Trivy
+- Number of source findings: `3`
+- DefectDojo primary finding ID: `119`
+- Duplicate findings: `12` and `336`
 
-- Total findings: `397`
-- Active findings: `348`
-- Inactive findings: `49`
-- Primary findings: `349`
-- Duplicate findings: `48`
-- Risk accepted findings: `1`
+DefectDojo initially deduplicated the two Trivy findings automatically.
+Because the Grype parser generated a different scanner-specific hash, the
+cross-parser relationship was explicitly reviewed and linked to the same
+primary finding.
 
-## Active primary findings by severity
+Final deduplication totals:
+
+| State | Count |
+|---|---:|
+| Total imported findings | 397 |
+| Unique primary findings | 348 |
+| Duplicate findings | 49 |
+| Active primary findings | 347 |
+| Inactive findings | 50 |
+
+## Task 2: Governance Report
+
+### Executive Summary
+
+OWASP Juice Shop was scanned through seven DefectDojo scan types, producing
+397 raw findings and 348 unique findings after deduplication. The current
+active backlog contains 347 primary findings, including 12 Critical and 121
+High findings. No findings have yet been remediated, so MTTR and
+closed-finding SLA compliance cannot be calculated from a valid sample; all
+334 active primary findings covered by the SLA matrix are currently within
+their deadlines.
+
+### SLA matrix
+
+A dedicated DefectDojo SLA configuration named `Lab 10 SLA Matrix` was
+created and assigned to Product ID 1.
+
+| Severity | SLA | Enforcement |
+|---|---:|---|
+| Critical | 24 hours | Enabled |
+| High | 7 days | Enabled |
+| Medium | 30 days | Enabled |
+| Low | 90 days | Enabled |
+
+The configuration has SLA ID `3`.
+
+Because the findings existed before the SLA configuration was assigned, SLA
+start and expiration dates were backfilled for all applicable findings.
+
+Backfill result:
+
+- Findings processed: `397`
+- Findings updated: `384`
+- Info findings skipped because no Info SLA was required: `13`
+- Failed updates: `0`
+
+Example expiration dates for findings discovered on `2026-07-10`:
+
+| Severity | SLA expiration |
+|---|---|
+| Critical | `2026-07-11` |
+| High | `2026-07-17` |
+| Medium | `2026-08-09` |
+| Low | `2026-10-08` |
+
+### Findings by severity — active primary only
 
 | Severity | Count |
 |---|---:|
 | Critical | 12 |
-| High | 122 |
+| High | 121 |
 | Medium | 172 |
 | Low | 29 |
 | Info | 13 |
-| **Total** | **348** |
+| **Total** | **347** |
 
-## Deduplication
+Critical and High findings account for 133 active primary findings and are
+the first remediation priority under the SLA policy.
 
-DefectDojo deduplication was initially disabled:
+### Findings by source tool
+
+The table shows all findings attributed to each parser before removing
+duplicates from the source totals.
+
+| Tool | Total | Active | Mitigated | False Positive | Risk Accepted | Duplicates |
+|---|---:|---:|---:|---:|---:|---:|
+| Anchore Grype | 104 | 103 | 0 | 0 | 0 | 1 |
+| Trivy Scan | 163 | 115 | 0 | 0 | 0 | 48 |
+| Semgrep JSON Report | 22 | 22 | 0 | 0 | 0 | 0 |
+| ZAP Scan | 12 | 11 | 0 | 0 | 1 | 0 |
+| Checkov Scan | 80 | 80 | 0 | 0 | 0 | 0 |
+| KICS Scan | 16 | 16 | 0 | 0 | 0 | 0 |
+| **Total** | **397** | **347** | **0** | **0** | **1** | **49** |
+
+The Trivy total combines the Lab 4 filesystem/image test and the Lab 7
+container-image test. The two KICS imports are also combined in one
+source-tool row.
+
+### Program metrics
+
+- **MTTD:** `0 days`
+- **MTTR:** `N/A`
+- **MTTR sample size:** `0 closed findings`
+- **Vulnerability-age median:** `0 days`
+- **Raw scanner-record baseline:** `397 findings`
+- **Current normalized active primary backlog:** `347 findings`
+- **Normalized backlog change:** `-50 records`, or `-12.59%`
+- **Time-based backlog trend:** `N/A — only one measurement period exists`
+- **Open-finding SLA status:** `100% currently within SLA`
+- **Closed-finding SLA compliance:** `N/A — no mitigated findings`
+- **Active primary findings within SLA:** `334`
+- **Active primary findings over SLA:** `0`
+
+#### Metric methodology and limitations
+
+MTTD is zero days because the reports were imported into DefectDojo on the
+same calendar day as the capstone aggregation. This measures ingestion delay,
+not the age of the vulnerabilities in the upstream packages.
+
+MTTR is reported as `N/A` rather than zero because no finding has been marked
+as mitigated. Reporting zero would incorrectly imply immediate remediation.
+
+The median open vulnerability age is zero days because all findings were
+created in DefectDojo on `2026-07-10` and the metrics were collected on the
+same day.
+
+The comparison between 397 raw imported findings and 347 active primary
+findings represents normalization of scanner output, not a time-based backlog
+trend. The reduction comes from 49 duplicate relationships and one
+risk-accepted item; it does not represent 50 remediated vulnerabilities.
+A genuine backlog trend cannot yet be calculated because only one measurement
+period exists.
+
+The open-finding SLA status is 100% within deadline as of `2026-07-10`: all
+334 active primary findings with Critical, High, Medium or Low severity are
+still within their configured deadlines. Closed-finding SLA compliance is
+reported as `N/A` because no findings have been mitigated. The 13 Info findings
+are excluded because the assignment does not define an SLA for Info severity.
+
+### CVSS and EPSS triage
+
+The first prioritization dimension is technical severity. Critical and High
+findings receive the shortest SLA deadlines and form the initial remediation
+queue.
+
+The second dimension is exploit likelihood and real-world exposure. Where
+EPSS data is available, the remediation order should follow this matrix:
+
+| CVSS severity | EPSS likelihood | Priority |
+|---|---|---|
+| High/Critical | High | Immediate remediation |
+| High/Critical | Low | Validate reachability and remediate within SLA |
+| Medium/Low | High | Escalate because exploitation is likely |
+| Medium/Low | Low | Normal backlog or documented acceptance |
+
+The current local import dataset does not contain a complete and consistently
+populated EPSS value for every finding. Therefore no invented EPSS percentage
+is reported. The next automation step is to enrich CVE findings with EPSS and
+use it together with reachability and asset exposure.
+
+### Risk-accepted items
+
+| Finding | Severity | Source | Reason | Expiry date |
+|---|---|---|---|---|
+| `393` — X-Content-Type-Options Header Missing | Low | ZAP Scan | Juice Shop is intentionally vulnerable and is running only in an isolated local training environment. The acceptance is temporary and must not be used for a production deployment. | `2026-12-15` |
+
+Risk Acceptance details:
+
+- Decision: `Accept`
+- Security recommendation: `Fix`
+- Active: `false`
+- Risk accepted: `true`
+- Mitigated: `false`
+
+Recommended remediation remains to configure the application or reverse proxy
+to return:
 
 ```text
-enable_deduplication = False
+X-Content-Type-Options: nosniff
 ```
 
-The setting was enabled:
+The explicit expiry prevents the accepted risk from becoming a permanent,
+unreviewed exception.
 
-```text
-enable_deduplication = True
-false_positive_history = False
-```
+### Next-quarter goal — OWASP SAMM
 
-Backlog deduplication was then executed for the `Trivy Scan` parser.
+The next-quarter goal is to mature the OWASP SAMM **Defect Management**
+practice. The current program has 347 active primary findings, including 133
+Critical or High findings, but no closed-finding sample and therefore no real
+MTTR baseline.
 
-The final result was:
+The concrete target is to remediate or formally disposition every Critical
+finding within 24 hours and every High finding within seven days, while
+recording mitigation dates in DefectDojo. This will create a valid MTTR
+dataset, allow closed-within-SLA measurement, and replace the current
+same-day ingestion metrics with remediation-outcome metrics.
 
-```text
-total: 397
-duplicates: 48
-primary: 349
-active: 349
-inactive: 48
-```
+## Bonus: Interview Walkthrough
 
-### Deduplication example
-
-`CVE-2026-45447` was detected in `libssl3t64` version
-`3.5.5-1~deb13u2` by both Anchore Grype and Trivy.
-
-| Finding ID | Test ID | Scanner | Duplicate | Primary finding |
-|---:|---:|---|---|---:|
-| 12 | 1 | Anchore Grype | No | — |
-| 119 | 2 | Trivy Scan | No | — |
-| 336 | 8 | Trivy Scan | Yes | 119 |
-
-The two Trivy findings had the same hash:
-
-```text
-7d19791d5a04c3ee77d1d2db7741aef3bbeef024e934248078a2355ffe31c200
-```
-
-Finding `336` was marked as a duplicate of finding `119` and was
-deactivated.
-
-The Grype finding remained separate because its scanner-specific hash was
-different:
-
-```text
-3902bc74c8c49dc8eb67afc7e1f5ccc519a355a4971054d2ed721988e5bb569d
-```
-
-This demonstrates same-parser deduplication between two Trivy tests. The
-cross-tool Grype result remains separate because its calculated hash differs.
-
-## Risk Acceptance
-
-Risk Acceptance was created for:
-
-- Finding ID: `393`
-- Title: `X-Content-Type-Options Header Missing`
-- Severity: `Low`
-- Scanner: `ZAP Scan`
-- Endpoint: `http://juice-shop:3000/socket.io/`
-- Name: `Temporary acceptance for training environment`
-
-Decision:
-
-```text
-Accept
-```
-
-Security recommendation:
-
-```text
-Fix
-```
-
-Decision justification:
-
-> The application is intentionally vulnerable and is used only in an
-> isolated local training environment. The risk is temporarily accepted for
-> the duration of the course lab. This configuration must not be used in
-> production.
-
-Recommended remediation:
-
-```text
-Configure the application or web server to return the
-X-Content-Type-Options: nosniff header on all responses.
-```
-
-Expiration date:
-
-```text
-2026-12-15
-```
-
-After Risk Acceptance was saved, the finding had the following state:
-
-```json
-{
-  "id": 393,
-  "title": "X-Content-Type-Options Header Missing",
-  "severity": "Low",
-  "active": false,
-  "risk_accepted": true,
-  "is_mitigated": false,
-  "duplicate": false,
-  "test": 11
-}
-```
-
-## Top 10 active primary findings
-
-| ID | Severity | Finding | Component | Version | Vulnerability ID | Test |
-|---:|---|---|---|---|---|---:|
-| 2 | Critical | GHSA-c7hr-j4mj-j2w6 in jsonwebtoken:0.1.0 | jsonwebtoken | 0.1.0 | GHSA-c7hr-j4mj-j2w6 | 1 |
-| 3 | Critical | GHSA-c7hr-j4mj-j2w6 in jsonwebtoken:0.4.0 | jsonwebtoken | 0.4.0 | GHSA-c7hr-j4mj-j2w6 | 1 |
-| 5 | Critical | GHSA-jf85-cpcp-j695 in lodash:2.4.2 | lodash | 2.4.2 | GHSA-jf85-cpcp-j695 | 1 |
-| 22 | Critical | GHSA-xwcq-pm8m-c4vf in crypto-js:3.3.0 | crypto-js | 3.3.0 | GHSA-xwcq-pm8m-c4vf | 1 |
-| 36 | Critical | CVE-2026-5450 in libc6:2.41-12+deb13u2 | libc6 | 2.41-12+deb13u2 | CVE-2026-5450 | 1 |
-| 70 | Critical | CVE-2026-34182 in libssl3t64:3.5.5-1~deb13u2 | libssl3t64 | 3.5.5-1~deb13u2 | CVE-2026-34182 | 1 |
-| 98 | Critical | GHSA-5mrr-rgp6-x4gr in marsdb:0.6.11 | marsdb | 0.6.11 | GHSA-5mrr-rgp6-x4gr | 1 |
-| 139 | Critical | CVE-2023-46233 Crypto-Js 3.3.0 | crypto-js | 3.3.0 | CVE-2023-46233 | 2 |
-| 146 | Critical | CVE-2015-9235 Jsonwebtoken 0.1.0 | jsonwebtoken | 0.1.0 | CVE-2015-9235 | 2 |
-| 151 | Critical | CVE-2015-9235 Jsonwebtoken 0.4.0 | jsonwebtoken | 0.4.0 | CVE-2015-9235 | 2 |
-
-## Reports not imported as normal vulnerability scans
-
-### Falco
-
-Falco output from Lab 9 was reviewed separately as runtime security
-evidence.
-
-The available file was a Falco runtime log rather than a vulnerability
-report supported by one of the installed DefectDojo parsers.
-
-It was therefore documented as runtime monitoring evidence and was not
-artificially imported using an unrelated scan type.
-
-### Cosign
-
-Cosign verification proves container image signature and supply-chain
-integrity. It is not a vulnerability scan and does not normally create
-vulnerability findings.
-
-Cosign verification results were therefore treated as security evidence
-rather than imported into DefectDojo as findings.
-
-## Conclusion
-
-The lab created a centralized vulnerability management workflow in
-DefectDojo for:
-
-- software composition analysis;
-- container image scanning;
-- static application security testing;
-- dynamic application security testing;
-- infrastructure-as-code scanning;
-- Kubernetes security scanning.
-
-The final result includes:
-
-- nine imported reports;
-- seven different scan types;
-- 397 total findings;
-- 48 duplicate findings;
-- 349 primary findings;
-- 348 active primary findings after Risk Acceptance;
-- one documented Risk Acceptance;
-- a verified same-parser deduplication example between two Trivy tests;
-- a documented cross-tool overlap between Anchore Grype and Trivy.
+- Walkthrough script: see `submissions/lab10-walkthrough.md`
+- Practiced runtime: `4 minutes 32 seconds`
+- Two anticipated Q&A questions covered: `yes`
+- Strongest claim in the script: “I reduced 397 scanner records to 348 unique findings, linked the same OpenSSL CVE across Grype and Trivy, and converted the resulting backlog into an enforceable SLA program.”
