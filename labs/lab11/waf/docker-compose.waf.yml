@@ -1,0 +1,33 @@
+services:
+  waf:
+    image: owasp/modsecurity-crs:4.25.1-nginx-lts
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    ports:
+      - "8082:8080"
+    environment:
+      BACKEND: "https://nginx:8443"
+      PORT: "8080"
+
+      MODSEC_RULE_ENGINE: "On"
+      MODSEC_REQ_BODY_ACCESS: "On"
+
+      BLOCKING_PARANOIA: "1"
+      DETECTION_PARANOIA: "1"
+      ANOMALY_INBOUND: "5"
+      ANOMALY_OUTBOUND: "4"
+
+      MODSEC_AUDIT_ENGINE: "RelevantOnly"
+      MODSEC_AUDIT_LOG: "/dev/stdout"
+      MODSEC_AUDIT_LOG_FORMAT: "JSON"
+      MODSEC_AUDIT_LOG_TYPE: "Serial"
+
+      PROXY_SSL_VERIFY: "off"
+      PROXY_SSL_PROTOCOLS: "TLSv1.3"
+
+      SERVER_NAME: "localhost"
+      SERVER_TOKENS: "off"
+
+    networks:
+      - default
